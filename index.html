@@ -140,7 +140,7 @@
           <button type="button" id="modeManual">Manual</button>
         </div>
         <div id="autoClockWrap" class="liveclock">—</div>
-        <input type="text" id="dtManual" placeholder="e.g. 05 Jul 2026, 14:32" style="display:none;">
+        <input type="text" id="dtManual" placeholder="e.g. 05 July 2026 14:32 PM" style="display:none;">
       </div>
 
       <div class="panel">
@@ -238,8 +238,10 @@
   // ---- date/time mode ----
   function pad2(n){ return n<10 ? '0'+n : ''+n; }
   function formatDateTime(d){
-    const months=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-    return pad2(d.getDate())+' '+months[d.getMonth()]+' '+d.getFullYear()+', '+pad2(d.getHours())+':'+pad2(d.getMinutes())+':'+pad2(d.getSeconds());
+    const months=['January','February','March','April','May','June','July','August','September','October','November','December'];
+    const hours24 = d.getHours();
+    const ampm = hours24 >= 12 ? 'PM' : 'AM';
+    return pad2(d.getDate())+' '+months[d.getMonth()]+' '+d.getFullYear()+' '+pad2(hours24)+':'+pad2(d.getMinutes())+' '+ampm;
   }
   function tickClock(){
     liveDtString = formatDateTime(new Date());
@@ -271,7 +273,7 @@
     if(!str) return '';
     const n = parseFloat(str);
     if(isNaN(n)) return str; // not a number, leave as-is
-    return n.toFixed(7);
+    return n.toFixed(8);
   }
 
   // ---- lat/long parsing ----
@@ -391,7 +393,7 @@
 
     let ty = boxY + pad + fontSize*0.85;
     built.forEach(b=>{
-      ctx.fillStyle = '#f55858';
+      ctx.fillStyle = '#ed2f21';
       ctx.fillText(b.text, boxX + pad, ty);
       ty += lineGap;
     });
@@ -410,7 +412,7 @@
     const lineGap = Math.round(fontSize * 1.45);
     const boxMaxWidth = W * 0.62;
 
-    ctx.font = fontSize + 'px monospace';
+    ctx.font = fontSize + 'px "Times New Roman", Times, serif';
     ctx.font = 'bold ' + ctx.font;
 
     const topRows = [
