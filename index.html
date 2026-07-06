@@ -10,8 +10,8 @@
     --paper:#f6f4ef;
     --panel:#ffffff;
     --line:#dcd8cf;
-    --accent:#d9740a;
-    --accent-dim:#f2c48d;
+    --accent:#f55858;
+    --accent-dim:#fbc9c9;
     --ok:#2f7a4f;
     --mono: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
     --sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
@@ -65,6 +65,7 @@
     border-radius:2px;font-family:var(--mono);font-size:13px;
     background:#fcfbf8;color:var(--ink);
   }
+  input:disabled{background:#efece4;color:#a39c8d;}
   input[type=text]:focus{outline:2px solid var(--accent-dim);border-color:var(--accent);}
   textarea{
     width:100%;padding:9px 10px;border:1px solid var(--line);border-radius:2px;
@@ -77,7 +78,7 @@
     border:2px dashed var(--line);border-radius:3px;padding:26px 14px;
     text-align:center;cursor:pointer;transition:.15s;font-size:13px;color:#7a746a;
   }
-  .dropzone.drag{border-color:var(--accent);background:#fdf3e8;color:var(--accent);}
+  .dropzone.drag{border-color:var(--accent);background:#fdeaea;color:var(--accent);}
   .dropzone strong{color:var(--ink);}
 
   canvas{width:100%;height:auto;display:block;border:1px solid var(--line);background:#eee;}
@@ -100,12 +101,17 @@
 
   .status{font-family:var(--mono);font-size:11px;color:var(--ok);margin-top:8px;min-height:14px;}
 
-  .field-preview{
-    font-family:var(--mono);font-size:11.5px;background:#f0ede4;border:1px solid var(--line);
-    padding:10px;border-radius:2px;line-height:1.55;margin-top:10px;color:#55503f;
+  /* segmented toggle for auto/manual */
+  .seg{display:flex;border:1px solid var(--ink);border-radius:2px;overflow:hidden;margin-bottom:8px;}
+  .seg button{
+    flex:1;background:#fff;color:var(--ink);border:none;border-radius:0;
+    font-size:12px;padding:8px 6px;
   }
-  .field-preview .lbl{color:#55503f;}
-  .field-preview .val{color:var(--accent);}
+  .seg button.active{background:var(--accent);color:#fff;}
+
+  .parsed{font-family:var(--mono);font-size:11px;color:var(--accent);margin-top:4px;}
+  .liveclock{font-family:var(--mono);font-size:14px;padding:9px 10px;border:1px solid var(--line);
+    background:#f0ede4;border-radius:2px;color:var(--ink);}
 </style>
 </head>
 <body>
@@ -128,24 +134,29 @@
       </div>
 
       <div class="panel">
-        <p class="section-label">Field data (this photo)</p>
-        <label for="dt">Date &amp; time</label>
-        <input type="text" id="dt" placeholder="e.g. 05 Jul 2026, 14:32">
-        <label for="addr">Address</label>
-        <input type="text" id="addr" placeholder="e.g. 12 MG Road, Bengaluru">
-        <label for="latlng">Latitude &amp; longitude</label>
-        <input type="text" id="latlng" placeholder="e.g. 12.9716, 77.5946">
+        <p class="section-label">Date &amp; time</p>
+        <div class="seg">
+          <button type="button" id="modeAuto" class="active">Auto (now)</button>
+          <button type="button" id="modeManual">Manual</button>
+        </div>
+        <div id="autoClockWrap" class="liveclock">—</div>
+        <input type="text" id="dtManual" placeholder="e.g. 05 Jul 2026, 14:32" style="display:none;">
+      </div>
+
+      <div class="panel">
+        <p class="section-label">Location</p>
+        <label for="latlngRaw">Paste "lat, long"</label>
+        <input type="text" id="latlngRaw" placeholder="12.736096751436454, 77.66226634383445">
+        <div class="parsed" id="parsedLatLng">Lat: — · Long: —</div>
       </div>
 
       <div class="panel">
         <p class="section-label">Constant text (saved on this device)</p>
-        <label for="line1">Header line 1</label>
-        <textarea id="line1" rows="1">captured by pratheeksy</textarea>
-        <label for="line2">Header line 2</label>
-        <textarea id="line2" rows="1">#synforeever</textarea>
-        <label for="line3">Footer line</label>
-        <textarea id="line3" rows="1">nsyn</textarea>
-        <p class="hint">These stay the same across photos — edit once, they're remembered next time you open this page.</p>
+        <label for="line1">Header line (above date/time)</label>
+        <textarea id="line1" rows="1"></textarea>
+        <label for="line3">Footer line (below date/time)</label>
+        <textarea id="line3" rows="1"></textarea>
+        <p class="hint">Leave blank to omit. These stay the same across photos and are remembered next time.</p>
       </div>
     </div>
 
@@ -159,15 +170,6 @@
             <span>Upload a photo to see the stamped preview</span>
           </div>
           <canvas id="canvas" style="display:none;"></canvas>
-        </div>
-
-        <div class="field-preview">
-          <div><span class="lbl" id="pl1">constant text</span></div>
-          <div><span class="lbl" id="pl2">more constant text</span></div>
-          <div><span class="lbl"></span><span class="val" id="pv1">—</span></div>
-          <div><span class="lbl"></span><span class="val" id="pv2">—</span></div>
-          <div><span class="lbl"></span><span class="val" id="pv3">—</span></div>
-          <div><span class="lbl" id="pl3">constant text</span></div>
         </div>
 
         <div class="btnbar">
@@ -192,56 +194,103 @@
   const resetBtn = document.getElementById('resetBtn');
   const statusEl = document.getElementById('status');
 
-  const dt = document.getElementById('dt');
-  const addr = document.getElementById('addr');
-  const latlng = document.getElementById('latlng');
-  const line1 = document.getElementById('line1');
-  const line2 = document.getElementById('line2');
-  const line3 = document.getElementById('line3');
+  const modeAuto = document.getElementById('modeAuto');
+  const modeManual = document.getElementById('modeManual');
+  const autoClockWrap = document.getElementById('autoClockWrap');
+  const dtManual = document.getElementById('dtManual');
 
-  const pv1 = document.getElementById('pv1');
-  const pv2 = document.getElementById('pv2');
-  const pv3 = document.getElementById('pv3');
-  const pl1 = document.getElementById('pl1');
-  const pl2 = document.getElementById('pl2');
-  const pl3 = document.getElementById('pl3');
+  const latlngRaw = document.getElementById('latlngRaw');
+  const parsedLatLng = document.getElementById('parsedLatLng');
+  const line1 = document.getElementById('line1');
+  const line3 = document.getElementById('line3');
 
   let img = null;
   let originalFileName = 'photo';
+  let dtMode = 'auto'; // 'auto' | 'manual'
+  let liveDtString = '';
+  let lat = '', lon = '';
 
-  // ---- persist constant text lines locally ----
-  const STORE_KEY = 'fieldstamp_constants_v1';
-  function loadConstants(){
+  // ---- persist constant text locally ----
+  const STORE_KEY = 'fieldstamp_settings_v3';
+  function loadSettings(){
     try{
       const raw = localStorage.getItem(STORE_KEY);
       if(raw){
         const data = JSON.parse(raw);
         if(data.line1 !== undefined) line1.value = data.line1;
-        if(data.line2 !== undefined) line2.value = data.line2;
         if(data.line3 !== undefined) line3.value = data.line3;
       }
     }catch(e){}
   }
-  function saveConstants(){
+  function saveSettings(){
     try{
       localStorage.setItem(STORE_KEY, JSON.stringify({
-        line1: line1.value, line2: line2.value, line3: line3.value
+        line1: line1.value, line3: line3.value
       }));
     }catch(e){}
   }
-  loadConstants();
-  [line1,line2,line3].forEach(el=>el.addEventListener('input', ()=>{ saveConstants(); syncPreview(); draw(); }));
+  loadSettings();
 
-  function syncPreview(){
-    pl1.textContent = line1.value || ' ';
-    pl2.textContent = line2.value || ' ';
-    pl3.textContent = line3.value || ' ';
-    pv1.textContent = dt.value || '—';
-    pv2.textContent = addr.value || '—';
-    pv3.textContent = latlng.value || '—';
+  [line1, line3].forEach(el=>{
+    el.addEventListener('input', ()=>{ saveSettings(); draw(); });
+  });
+
+  // ---- date/time mode ----
+  function pad2(n){ return n<10 ? '0'+n : ''+n; }
+  function formatDateTime(d){
+    const months=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    return pad2(d.getDate())+' '+months[d.getMonth()]+' '+d.getFullYear()+', '+pad2(d.getHours())+':'+pad2(d.getMinutes())+':'+pad2(d.getSeconds());
   }
-  [dt,addr,latlng].forEach(el=>el.addEventListener('input', ()=>{ syncPreview(); draw(); }));
-  syncPreview();
+  function tickClock(){
+    liveDtString = formatDateTime(new Date());
+    if(dtMode === 'auto'){
+      autoClockWrap.textContent = liveDtString;
+      draw();
+    }
+  }
+  setInterval(tickClock, 1000);
+  tickClock();
+
+  function setMode(mode){
+    dtMode = mode;
+    modeAuto.classList.toggle('active', mode==='auto');
+    modeManual.classList.toggle('active', mode==='manual');
+    autoClockWrap.style.display = mode==='auto' ? 'block' : 'none';
+    dtManual.style.display = mode==='manual' ? 'block' : 'none';
+    draw();
+  }
+  modeAuto.addEventListener('click', ()=>setMode('auto'));
+  modeManual.addEventListener('click', ()=>setMode('manual'));
+  dtManual.addEventListener('input', draw);
+
+  function currentDtValue(){
+    return dtMode === 'auto' ? liveDtString : (dtManual.value || '—');
+  }
+
+  function formatCoord(str){
+    if(!str) return '';
+    const n = parseFloat(str);
+    if(isNaN(n)) return str; // not a number, leave as-is
+    return n.toFixed(7);
+  }
+
+  // ---- lat/long parsing ----
+  latlngRaw.addEventListener('input', ()=>{
+    const raw = latlngRaw.value;
+    const idx = raw.indexOf(',');
+    let latRaw, lonRaw;
+    if(idx === -1){
+      latRaw = raw.trim();
+      lonRaw = '';
+    } else {
+      latRaw = raw.slice(0, idx).trim();
+      lonRaw = raw.slice(idx+1).trim();
+    }
+    lat = formatCoord(latRaw);
+    lon = formatCoord(lonRaw);
+    parsedLatLng.textContent = 'Lat: ' + (lat || '—') + ' · Long: ' + (lon || '—');
+    draw();
+  });
 
   // ---- file handling ----
   dropzone.addEventListener('click', ()=>fileInput.click());
@@ -257,8 +306,8 @@
 
   function handleFile(file){
     if(!file.type.startsWith('image/')){
-      statusEl.textContent = 'That file is not an image.';
       statusEl.style.color = '#b3413a';
+      statusEl.textContent = 'That file is not an image.';
       return;
     }
     originalFileName = file.name.replace(/\.[^.]+$/, '') || 'photo';
@@ -290,7 +339,7 @@
     statusEl.textContent = '';
   });
 
-  // ---- drawing the watermark ----
+  // ---- drawing helpers ----
   function wrapLines(context, text, maxWidth){
     if(!text) return [''];
     const words = text.split(' ');
@@ -309,6 +358,45 @@
     return lines;
   }
 
+  function buildRows(context, rows, maxWidth){
+    const built = [];
+    rows.forEach(r=>{
+      const labelText = r.label || '';
+      const valueText = r.plain ? '' : (r.value || '');
+      const full = labelText + valueText;
+      if(!full.trim()) return; // skip empty rows entirely
+      const wrapped = wrapLines(context, full, maxWidth);
+      wrapped.forEach(wline=>{
+        built.push({ text: wline });
+      });
+    });
+    return built;
+  }
+
+  function drawBox(anchor, rows, W, H, fontSize, pad, lineGap, maxWidth){
+    const built = buildRows(ctx, rows, maxWidth - pad*2);
+    if(built.length === 0) return;
+
+    let boxWidth = 0;
+    built.forEach(b=>{ boxWidth = Math.max(boxWidth, ctx.measureText(b.text).width); });
+    boxWidth = Math.min(maxWidth, boxWidth + pad*2);
+    const boxHeight = pad*2 + built.length * lineGap;
+
+    let boxX, boxY;
+    if(anchor === 'top-left'){ boxX = 0; boxY = 0; }
+    else { boxX = W - boxWidth; boxY = H - boxHeight; } // bottom-right
+
+    ctx.fillStyle = 'rgba(120,120,120,0)';
+    ctx.fillRect(boxX, boxY, boxWidth, boxHeight);
+
+    let ty = boxY + pad + fontSize*0.85;
+    built.forEach(b=>{
+      ctx.fillStyle = '#f55858';
+      ctx.fillText(b.text, boxX + pad, ty);
+      ty += lineGap;
+    });
+  }
+
   function draw(){
     if(!img) return;
     canvas.width = img.naturalWidth;
@@ -325,62 +413,25 @@
     ctx.font = fontSize + 'px monospace';
     ctx.font = 'bold ' + ctx.font;
 
-    const rows = [
-      {label: line1.value, value: '', plain:true},
-      {label: line2.value, value: '', plain:true},
-      {label: '', value: dt.value || '—'},
-      {label: '', value: addr.value || '—'},
-      {label: '', value: latlng.value || '—'},
-      {label: line3.value, value: '', plain:true},
+    const topRows = [
+      { label: 'Latitude: ', value: lat || '—' },
+      { label: 'Longitude: ', value: lon || '—' },
     ];
 
-    // build wrapped display lines
-    const built = [];
-    rows.forEach(r=>{
-      const full = r.label + (r.plain ? '' : r.value);
-      const wrapped = wrapLines(ctx, full, boxMaxWidth - pad*2);
-      wrapped.forEach((wline, idx)=>{
-        built.push({
-          text: wline,
-          labelLen: idx===0 ? r.label.length : 0,
-          plain: r.plain
-        });
-      });
-    });
+    const bottomRows = [
+      { label: line1.value, value: '', plain: true },
+      { label: '', value: currentDtValue() },
+      { label: line3.value, value: '', plain: true },
+    ];
 
-    const boxHeight = pad*2 + built.length * lineGap;
-    let boxWidth = 0;
-    built.forEach(b=>{ boxWidth = Math.max(boxWidth, ctx.measureText(b.text).width); });
-    boxWidth = Math.min(boxMaxWidth, boxWidth + pad*2);
-
-    const boxX = 0;
-    const boxY = H - boxHeight;
-
-    ctx.fillStyle = 'rgba(120,120,120,0.0)';
-    ctx.fillRect(boxX, boxY, boxWidth, boxHeight);
-
-    let ty = boxY + pad + fontSize*0.85;
-    built.forEach(b=>{
-      if(b.plain){
-        ctx.fillStyle = '#f55858';
-        ctx.fillText(b.text, boxX + pad, ty);
-      } else {
-        const labelPart = b.text.slice(0, b.labelLen);
-        const valuePart = b.text.slice(b.labelLen);
-        ctx.fillStyle = '#f55858';
-        ctx.fillText(labelPart, boxX + pad, ty);
-        const labelWidth = ctx.measureText(labelPart).width;
-        ctx.fillStyle = '#f55858';
-        ctx.fillText(valuePart, boxX + pad + labelWidth, ty);
-      }
-      ty += lineGap;
-    });
+    drawBox('top-left', topRows, W, H, fontSize, pad, lineGap, boxMaxWidth);
+    drawBox('bottom-right', bottomRows, W, H, fontSize, pad, lineGap, boxMaxWidth);
   }
 
   downloadBtn.addEventListener('click', ()=>{
     if(!img) return;
     const link = document.createElement('a');
-    const stamp = (dt.value || 'stamped').replace(/[^a-zA-Z0-9]+/g,'_');
+    const stamp = currentDtValue().replace(/[^a-zA-Z0-9]+/g,'_');
     link.download = originalFileName + '_' + stamp + '.png';
     link.href = canvas.toDataURL('image/png');
     link.click();
